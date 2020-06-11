@@ -1,14 +1,12 @@
 cmake_minimum_required (VERSION 3.13)
-SET (CMAKE_BUILD_TYPE "Debug")
-SET (CMAKE_CXX_FLAGS "-g -std=c++14")
+SET (CMAKE_BUILD_TYPE "Release")
+SET (CMAKE_CXX_FLAGS "-s -std=c++14 -static-libgcc -static-libstdc++ -static")
 SET (PROJECT SIServer)
 
 project(${PROJECT})
 
 
-find_package (Qt5Core REQUIRED)
 
-qt5_wrap_cpp (MOC_SOURCES ${HEADERS})
 
 SET (HEADERS
         src/server.h
@@ -26,14 +24,14 @@ SET (SOURCES
         src/connectionremoteemulator.cpp
 	)
 
-add_executable (${PROJECT} ${HEADERS} ${MOC_SOURCES} ${SOURCES})
+add_executable (${PROJECT} ${HEADERS} ${SOURCES})
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
-    target_link_libraries (SIServer Qt5::Core ws2_32.lib mswsock.lib PowrProf.lib)
+    target_link_libraries (SIServer ws2_32.lib mswsock.lib PowrProf.lib Winmm.lib)
 endif(${CMAKE_SYSTEM_NAME} STREQUAL Windows)
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
-    target_link_libraries (SIServer Qt5::Core ${LIBS} pthread)
+    target_link_libraries (SIServer ${LIBS} pthread)
 endif(${CMAKE_SYSTEM_NAME} STREQUAL Linux)
 
 target_compile_options (${PROJECT} PUBLIC -fPIC)
