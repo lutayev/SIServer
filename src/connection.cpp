@@ -1,33 +1,38 @@
 #include "connection.h"
-#include "powrprof.h"
 
 Connection::Connection(unsigned short fd)
 {
     m_sock = fd;
 	done = false;
-	m_error = SUCCESS;
+    //m_error = ;
 
     m_logFile = "log_" + m_id + ".txt";
 
 	m_log.open(m_logFile.c_str(), 
 			std::ios_base::out | std::ios_base::ate | std::ios_base::app);
 
-	if (!m_log.good())
-		m_error = LOG_NOT_OPENED;
+    //if (!m_log.good())
+    //	m_error = LOG_NOT_OPENED;
 
 }
 
 void Connection::communicate()
 {
-    std::string message;
+    std::pair<uint8_t, std::string> message;
     for(;;)
     {
+        message.first = 0;
+        message.second.clear();
         //cout << "listening for incoming message...\n";
-        message = readMessage();
-        if (!message.size()) {
+        Protocol::ERRORS err = Protocol::readMessage(m_sock, message);
+        if (err == Protocol::ERRORS::WRONG_COMMUNICATION) {
+            std::cout << "Wrong communication" << std::endl;
             break;
+        } else if (err == Protocol::ERRORS::WRONG_MESSAGE) {
+            std::cout << "Wrong message" << std::endl;
         }
-        std::cout << "Message: " << message << std::endl;
+
+        std::cout << "Message: " << message.second << std::endl;
         processMessage(message);
     }
 }
@@ -44,52 +49,11 @@ void Connection::pushCommand(const std::string &command)
     m_mtxCmd.unlock();          //UNLOCK
 }
 
-std::string Connection::readMessage()
+void Connection::processMessage(const std::pair<uint8_t, std::string>& message)
 {
-    char buf[Protocol::BUFSIZE];
-    m_error = SUCCESS;
-    std::string message = "";
-    int result = recv(m_sock, buf, Protocol::BUFSIZE, 0);
-    //Check read
-    if (result == 0 || result == SOCKET_ERROR) {
-        std::cout << "Erorr communication" << std::endl;
-        m_error = WRONG_COMMUNICATION;
-        return "";
-    }
 
-    //Check protocol
-    if (buf[0] != Protocol::SOH) {
-        std::cout << "Wrong message" << std::endl;
-        m_error = WRONG_MESSAGE;
-        return "";
-    }
-
-    message = std::string(buf, 0, result);
-
-    return message;
-}
-
-bool Connection::writeMessage(const std::string &msg)
-{
-    int result = send(m_sock, msg.c_str(), msg.size(), 0);
-    if (result == 0 || result == SOCKET_ERROR) {
-        return false;
-    }
-    return true;
-}
-
-void Connection::processMessage(const std::string &msg)
-{
-    //Parse incoming message
-    std::pair<char, std::string> parsed;
-    if (!Protocol::parseResponse(msg, parsed)) {
-        std::cout << "Can't parse client's request" << std::endl;
-        writeMessage(Protocol::createRequest(Protocol::NAK));
-        return;
-    }
-
-    char command         = parsed.first;
-    std::string text     = parsed.second;
+    uint8_t command         = message.first;
+    std::string text        = message.second;
 
     std::string response;
 
@@ -99,48 +63,30 @@ void Connection::processMessage(const std::string &msg)
         response = popCommand();
         if (!response.size())
             response = "wait";
-        response = Protocol::createRequest(Protocol::SRV_SND_COMMAND, response);
-        writeMessage(response);
+        Protocol::writeMessage(m_sock, Protocol::SRV_SND_COMMAND, response);
         break;
     case Protocol::CL_SND_ID:
         std::cout << "Client sent ID " << text << std::endl;
         m_id = text;
-        response = Protocol::createRequest(Protocol::ACK);
-        writeMessage(response);
+        Protocol::writeMessage(m_sock, Protocol::ACK);
         break;
     case Protocol::CL_REQ_ID:
         std::cout << "Client requested ID" << std::endl;
-        response = Protocol::createRequest(Protocol::SRV_SND_TEXT, "testId");
-        writeMessage(response);
+        Protocol::writeMessage(m_sock, Protocol::SRV_SND_TEXT, "testId");
         break;
     case Protocol::CL_REQ_FILE:
         std::cout << "Client requested file" << std::endl;
-        response = Protocol::createRequest(Protocol::NAK);
-        writeMessage(response);
+        Protocol::writeMessage(m_sock, Protocol::NAK);
         break;
     case Protocol::CL_SND_PRINT:
         std::cout << "Client sent printable info" << std::endl;
-        std::cout << parsed.second << std::endl;
-        response = Protocol::createRequest(Protocol::ACK);
-        writeMessage(response);
-        break;
-    case Protocol::USR_MUTE:
-        //SetSuspendState(true, true, true);
-        INPUT input;
-        input.type = INPUT_KEYBOARD;
-        input.ki.dwFlags = 0;
-        input.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
-        input.ki.wScan=MapVirtualKey(VK_VOLUME_MUTE,0);
-        input.ki.time = 0;
-        input.ki.dwExtraInfo = 0;
-        input.ki.wVk = VK_VOLUME_MUTE;
-        SendInput(1,&input,sizeof(input));
+        std::cout << text << std::endl;
+        Protocol::writeMessage(m_sock, Protocol::ACK);
         break;
 
     default:
         std::cout << "Unknown message" << std::endl;
-        response = Protocol::createRequest(Protocol::NAK);
-        writeMessage(response);
+        Protocol::writeMessage(m_sock, Protocol::NAK);
     }
 }
 

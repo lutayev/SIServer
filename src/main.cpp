@@ -1,7 +1,7 @@
 #include "server.h"
 
 int main(int argc, char** argv) {
-    Server server(8889);
+    Server server(8889, ServerType::remoteEmulatorServer);
     if (!server.isOk()) {
         std::cout << "Error bind or listen" << std::endl;
         return EXIT_FAILURE;

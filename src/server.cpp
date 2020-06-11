@@ -91,10 +91,14 @@ void Server::acceptManagers()
 
 void Server::addClient(unsigned short clientSocket)
 {
-    if (serverType == ServerType::remoteEmulatorServer)
-        Connection* client = new ConnectionRemoteEmulator(clientSocket);
-    else
-        Connection* client = new Connection(clientSocket);
+    Connection* client;
+    if (m_serverType == ServerType::remoteEmulatorServer) {
+        client = new ConnectionRemoteEmulator(clientSocket);
+        std::cout << "Start RemoteEmulatorServer" << std::endl;
+    } else {
+        client = new Connection(clientSocket);
+        std::cout << "Start Default server" << std::endl;
+    }
 
     //Insert client to map
     m_mtxClientsMap.lock();
